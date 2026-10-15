@@ -1,0 +1,76 @@
+@{
+    ViewData["Title"] = "Products";
+}
+
+<section>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="h2 mb-1">Products</h1>
+            <p class="text-muted mb-0">Manage your catalog and monitor stock levels.</p>
+        </div>
+        <span class="badge text-bg-primary fs-6"><span id="product-count">0</span> products</span>
+    </div>
+
+    <div class="alert alert-info" role="status">
+        Demo only: changes stay in this page session and are cleared when you reload.
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h2 class="h5 mb-0" id="product-form-title">Add product</h2>
+        </div>
+        <div class="card-body">
+            <form id="product-form" class="row g-3">
+                <input id="product-id" type="hidden" />
+                <div class="col-md-6">
+                    <label for="product-name" class="form-label">Product name</label>
+                    <input id="product-name" class="form-control" required maxlength="100" />
+                </div>
+                <div class="col-md-6">
+                    <label for="product-category" class="form-label">Category</label>
+                    <input id="product-category" class="form-control" required maxlength="80" />
+                </div>
+                <div class="col-md-6">
+                    <label for="product-price" class="form-label">Price (VND)</label>
+                    <input id="product-price" type="number" class="form-control" required min="1" max="1000000000" step="1" />
+                </div>
+                <div class="col-md-6">
+                    <label for="product-stock" class="form-label">Stock quantity</label>
+                    <input id="product-stock" type="number" class="form-control" required min="0" max="1000000" step="1" />
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit" id="product-submit">Add product</button>
+                    <button class="btn btn-outline-secondary d-none" type="button" id="product-cancel">Cancel edit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h2 class="h5 mb-0">Product catalog</h2>
+            <label class="visually-hidden" for="product-search">Search products</label>
+            <input id="product-search" class="form-control" type="search" placeholder="Search products..." />
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Product</th>
+                        <th scope="col">Category</th>
+                        <th scope="col" class="text-end">Price</th>
+                        <th scope="col" class="text-end">Stock</th>
+                        <th scope="col">Availability</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="product-rows"></tbody>
+            </table>
+        </div>
+        <div id="product-empty" class="p-4 text-center text-muted d-none">No products match your search.</div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/products.js" asp-append-version="true"></script>
+}
