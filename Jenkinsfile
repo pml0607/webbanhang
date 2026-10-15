@@ -31,11 +31,10 @@ pipeline {
         }
         stage('Deploy') {
             steps {
-                // Đặt app_offline.htm để IIS nhả file DLL
-                bat "echo <html><body>Đang cập nhật hệ thống...</body></html> > ${DEPLOY_DIR}\\app_offline.htm"
-                // Copy đè file publish vào IIS
+                // Chỉ dùng text thường, không chứa ký tự đặc biệt
+                bat "echo He thong dang duoc cap nhat... > ${DEPLOY_DIR}\\app_offline.htm"
+                
                 bat "xcopy /Y /S /I .\\publish\\* ${DEPLOY_DIR}"
-                // Xóa app_offline.htm để app chạy lại
                 bat "del ${DEPLOY_DIR}\\app_offline.htm"
             }
         }
