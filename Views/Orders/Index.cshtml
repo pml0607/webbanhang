@@ -1,0 +1,86 @@
+@{
+    ViewData["Title"] = "Orders";
+}
+
+<section>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="h2 mb-1">Orders</h1>
+            <p class="text-muted mb-0">Create orders and update their fulfillment status.</p>
+        </div>
+        <span class="badge text-bg-primary fs-6"><span id="order-count">0</span> orders</span>
+    </div>
+
+    <div class="alert alert-info" role="status">
+        Demo only: changes stay in this page session and are cleared when you reload.
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h2 class="h5 mb-0" id="order-form-title">Create order</h2>
+        </div>
+        <div class="card-body">
+            <form id="order-form" class="row g-3">
+                <input id="order-id" type="hidden" />
+                <div class="col-md-6">
+                    <label for="order-customer" class="form-label">Customer</label>
+                    <input id="order-customer" class="form-control" required maxlength="100" />
+                </div>
+                <div class="col-md-6">
+                    <label for="order-item" class="form-label">Item</label>
+                    <input id="order-item" class="form-control" required maxlength="100" />
+                </div>
+                <div class="col-sm-4">
+                    <label for="order-quantity" class="form-label">Quantity</label>
+                    <input id="order-quantity" type="number" class="form-control" required min="1" max="9999" step="1" value="1" />
+                </div>
+                <div class="col-sm-4">
+                    <label for="order-price" class="form-label">Unit price (VND)</label>
+                    <input id="order-price" type="number" class="form-control" required min="1" max="1000000000" step="1" />
+                </div>
+                <div class="col-sm-4">
+                    <label for="order-status" class="form-label">Status</label>
+                    <select id="order-status" class="form-select" required>
+                        <option value="Pending">Pending</option>
+                        <option value="Processing">Processing</option>
+                        <option value="Shipped">Shipped</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit" id="order-submit">Create order</button>
+                    <button class="btn btn-outline-secondary d-none" type="button" id="order-cancel">Cancel edit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h2 class="h5 mb-0">Order list</h2>
+            <label class="visually-hidden" for="order-search">Search orders</label>
+            <input id="order-search" class="form-control" type="search" placeholder="Search orders..." />
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Order</th>
+                        <th scope="col">Customer</th>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="text-end">Qty</th>
+                        <th scope="col" class="text-end">Total</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="order-rows"></tbody>
+            </table>
+        </div>
+        <div id="order-empty" class="p-4 text-center text-muted d-none">No orders match your search.</div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/orders.js" asp-append-version="true"></script>
+}
