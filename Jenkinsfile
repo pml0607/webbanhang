@@ -35,6 +35,7 @@ pipeline {
 
                 // Chỉ dùng text thường, không chứa ký tự đặc biệt
                 bat 'echo He thong dang duoc cap nhat... > "%DEPLOY_DIR%\\app_offline.htm"'
+                bat 'timeout /t 10 /nobreak >NUL'
                 
                 bat 'xcopy /Y /S /I .\\publish\\* "%DEPLOY_DIR%"'
                 bat 'del "%DEPLOY_DIR%\\app_offline.htm"'
