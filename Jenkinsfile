@@ -33,12 +33,15 @@ pipeline {
             steps {
                 bat 'if not exist "%DEPLOY_DIR%" mkdir "%DEPLOY_DIR%"'
 
-                // Chỉ dùng text thường, không chứa ký tự đặc biệt
-                bat 'echo He thong dang duoc cap nhat... > "%DEPLOY_DIR%\\app_offline.htm"'
-                bat 'timeout /t 10 /nobreak >NUL'
-                
-                bat 'xcopy /Y /S /I .\\publish\\* "%DEPLOY_DIR%"'
-                bat 'del "%DEPLOY_DIR%\\app_offline.htm"'
+                script {
+                    try {
+                        bat 'echo He thong dang duoc cap nhat... > "%DEPLOY_DIR%\\app_offline.htm"'
+                        sleep time: 10, unit: 'SECONDS'
+                        bat 'xcopy /Y /S /I .\\publish\\* "%DEPLOY_DIR%"'
+                    } finally {
+                        bat 'if exist "%DEPLOY_DIR%\\app_offline.htm" del /F /Q "%DEPLOY_DIR%\\app_offline.htm"'
+                    }
+                }
             }
         }
         stage('Verify') {
