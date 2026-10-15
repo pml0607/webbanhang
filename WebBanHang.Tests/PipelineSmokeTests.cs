@@ -9,7 +9,7 @@ public sealed class PipelineSmokeTests
     public void Addition_ReturnsExpectedTotal()
     {
         var actual = int.Parse("5", CultureInfo.InvariantCulture)
-            + int.Parse("4", CultureInfo.InvariantCulture);
+            + int.Parse("5", CultureInfo.InvariantCulture);
 
         Assert.AreEqual(10, actual);
     }
