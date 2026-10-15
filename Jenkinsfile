@@ -31,6 +31,8 @@ pipeline {
         }
         stage('Deploy') {
             steps {
+                bat 'if not exist "%DEPLOY_DIR%" mkdir "%DEPLOY_DIR%"'
+
                 // Chỉ dùng text thường, không chứa ký tự đặc biệt
                 bat "echo He thong dang duoc cap nhat... > ${DEPLOY_DIR}\\app_offline.htm"
                 
