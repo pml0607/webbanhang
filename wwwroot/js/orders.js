@@ -1,9 +1,5 @@
 (() => {
-    const orders = [
-        { id: 1, number: "ORD-1001", customer: "Nguyen Minh Anh", item: "Wireless headphones", quantity: 1, unitPrice: 1250000, status: "Processing" },
-        { id: 2, number: "ORD-1002", customer: "Tran Quoc Bao", item: "Mechanical keyboard", quantity: 2, unitPrice: 890000, status: "Pending" }
-    ];
-    let nextId = 3;
+    let orders = [];
 
     const form = document.querySelector("#order-form");
     if (!form) return;
@@ -30,6 +26,17 @@
         Shipped: "text-bg-success",
         Cancelled: "text-bg-secondary"
     };
+
+    async function loadOrders() {
+        try {
+            const res = await fetch("/api/orders");
+            if (!res.ok) throw new Error("Failed to fetch orders");
+            orders = await res.json();
+            render();
+        } catch (err) {
+            console.error("Error loading orders:", err);
+        }
+    }
 
     function textCell(value, className = "") {
         const cell = document.createElement("td");
@@ -66,7 +73,7 @@
 
             const statusCell = document.createElement("td");
             const badge = document.createElement("span");
-            badge.className = `badge ${statusStyles[order.status]}`;
+            badge.className = `badge ${statusStyles[order.status] || "text-bg-light"}`;
             badge.textContent = order.status;
             statusCell.append(badge);
             row.append(statusCell);
@@ -96,56 +103,81 @@
         cancel.classList.add("d-none");
     }
 
-    form.addEventListener("submit", event => {
+    form.addEventListener("submit", async event => {
         event.preventDefault();
         if (!form.reportValidity()) return;
 
-        const orderDetails = {
+        const order = {
             customer: fields.customer.value.trim(),
             item: fields.item.value.trim(),
             quantity: Number(fields.quantity.value),
             unitPrice: Number(fields.unitPrice.value),
             status: fields.status.value
         };
-        if (!Number.isSafeInteger(orderDetails.quantity) || orderDetails.quantity < 1 ||
-            !Number.isSafeInteger(orderDetails.unitPrice) || orderDetails.unitPrice < 1 ||
-            !Number.isSafeInteger(orderDetails.quantity * orderDetails.unitPrice)) return;
 
-        if (fields.id.value) {
-            const existing = orders.find(order => order.id === Number(fields.id.value));
-            if (!existing) return;
-            Object.assign(existing, orderDetails);
-        } else {
-            orders.push({ id: nextId, number: `ORD-${1000 + nextId++}`, ...orderDetails });
+        if (!Number.isSafeInteger(order.quantity) || order.quantity < 1 ||
+            !Number.isSafeInteger(order.unitPrice) || order.unitPrice < 1) return;
+
+        try {
+            submit.disabled = true;
+            if (fields.id.value) {
+                const id = Number(fields.id.value);
+                const existing = orders.find(item => item.id === id);
+                const number = existing ? existing.number : "";
+                const res = await fetch(`/api/orders/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id, number, ...order })
+                });
+                if (!res.ok) throw new Error("Failed to update order");
+            } else {
+                const res = await fetch("/api/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(order)
+                });
+                if (!res.ok) throw new Error("Failed to create order");
+            }
+
+            resetForm();
+            await loadOrders();
+        } catch (err) {
+            console.error("Error saving order:", err);
+            alert("Error saving order to database");
+        } finally {
+            submit.disabled = false;
         }
-
-        resetForm();
-        render();
     });
 
-    rows.addEventListener("click", event => {
+    rows.addEventListener("click", async event => {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
 
         const id = Number(button.dataset.id);
-        const index = orders.findIndex(order => order.id === id);
-        if (index < 0) return;
+        const order = orders.find(item => item.id === id);
+        if (!order) return;
 
         if (button.dataset.action === "delete") {
-            orders.splice(index, 1);
-            if (fields.id.value === String(id)) resetForm();
-            render();
+            if (!confirm(`Are you sure you want to delete order "${order.number}"?`)) return;
+            try {
+                const res = await fetch(`/api/orders/${id}`, { method: "DELETE" });
+                if (!res.ok) throw new Error("Failed to delete order");
+                if (fields.id.value === String(id)) resetForm();
+                await loadOrders();
+            } catch (err) {
+                console.error("Error deleting order:", err);
+                alert("Error deleting order from database");
+            }
             return;
         }
 
-        const order = orders[index];
         fields.id.value = String(order.id);
         fields.customer.value = order.customer;
         fields.item.value = order.item;
         fields.quantity.value = String(order.quantity);
         fields.unitPrice.value = String(order.unitPrice);
         fields.status.value = order.status;
-        title.textContent = `Edit ${order.number}`;
+        title.textContent = "Edit order";
         submit.textContent = "Save changes";
         cancel.classList.remove("d-none");
         fields.customer.focus();
@@ -153,5 +185,6 @@
 
     search.addEventListener("input", render);
     cancel.addEventListener("click", resetForm);
-    render();
+
+    loadOrders();
 })();

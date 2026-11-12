@@ -1,12 +1,17 @@
 pipeline {
     agent any
     environment {
-        DEPLOY_DIR = 'C:\\wwwroot\\webbanhang'
+        IMAGE_NAME = 'webbanhang'
+        CONTAINER_NAME = 'webbanhang'
+        NETWORK_NAME = 'monitoring-net'
+        APP_PORT = '8081'
+        DB_HOST = 'mssql-server'
+        DB_PASS = 'YourStrong@Passw0rd'
     }
     stages {
         stage('Checkout') {
             steps {
-                checkout scm // Tải mã nguồn từ GitHub[cite: 3]
+                checkout scm 
             }
         }
         stage('Restore') {
@@ -26,27 +31,40 @@ pipeline {
         }
         stage('Publish') {
             steps {
-                bat 'dotnet publish WebBanHang.csproj --configuration Release --no-restore --output .\\publish'
+                bat 'dotnet publish WebBanHang.csproj --configuration Release -r linux-x64 --self-contained true --output .\\publish'
             }
         }
-        stage('Deploy') {
+        stage('Docker Build') {
             steps {
-                bat 'if not exist "%DEPLOY_DIR%" mkdir "%DEPLOY_DIR%"'
-
+                bat 'docker build -t %IMAGE_NAME%:latest .'
+            }
+        }
+        stage('Ensure Infrastructure') {
+            steps {
+                bat '''
+                docker network inspect %NETWORK_NAME% >nul 2>&1 || docker network create %NETWORK_NAME%
+                docker inspect %DB_HOST% >nul 2>&1 || docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=%DB_PASS%" -p 1433:1433 --name %DB_HOST% --network %NETWORK_NAME% --restart unless-stopped -d mcr.microsoft.com/mssql/server:2022-latest
+                '''
+            }
+        }
+        stage('Docker Deploy') {
+            steps {
+                bat '''
+                docker stop %CONTAINER_NAME% >nul 2>&1 || echo No running container
+                docker rm -f %CONTAINER_NAME% >nul 2>&1 || echo No existing container
+                docker run -d --name %CONTAINER_NAME% --network %NETWORK_NAME% -p %APP_PORT%:%APP_PORT% -e ConnectionStrings__DefaultConnection="Server=%DB_HOST%,1433;Database=WebBanHangDb;User Id=sa;Password=%DB_PASS%;TrustServerCertificate=True;MultipleActiveResultSets=true;Connect Timeout=30;" --restart unless-stopped %IMAGE_NAME%:latest
+                '''
+            }
+        }
+        stage('Verify & Health Check') {
+            steps {
                 script {
-                    try {
-                        bat 'echo He thong dang duoc cap nhat... > "%DEPLOY_DIR%\\app_offline.htm"'
-                        sleep time: 10, unit: 'SECONDS'
-                        bat 'xcopy /Y /S /I .\\publish\\* "%DEPLOY_DIR%"'
-                    } finally {
-                        bat 'if exist "%DEPLOY_DIR%\\app_offline.htm" del /F /Q "%DEPLOY_DIR%\\app_offline.htm"'
-                    }
+                    echo 'Waiting for application and database to be fully up...'
+                    sleep time: 10, unit: 'SECONDS'
                 }
-            }
-        }
-        stage('Verify') {
-            steps {
-                bat 'curl --fail --silent --show-error http://localhost/webbanhang'
+                bat 'curl --fail --silent --show-error http://localhost:%APP_PORT%/'
+                bat 'curl --fail --silent --show-error http://localhost:%APP_PORT%/metrics'
+                bat 'curl --fail --silent --show-error http://localhost:%APP_PORT%/api/products'
             }
         }
     }

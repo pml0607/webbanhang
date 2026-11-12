@@ -1,9 +1,5 @@
 (() => {
-    const customers = [
-        { id: 1, name: "Nguyen Minh Anh", email: "minhanh@example.com", phone: "0901234567", city: "Ho Chi Minh City" },
-        { id: 2, name: "Tran Quoc Bao", email: "quocbao@example.com", phone: "0912345678", city: "Da Nang" }
-    ];
-    let nextId = 3;
+    let customers = [];
 
     const form = document.querySelector("#customer-form");
     if (!form) return;
@@ -22,6 +18,17 @@
     const title = document.querySelector("#customer-form-title");
     const submit = document.querySelector("#customer-submit");
     const cancel = document.querySelector("#customer-cancel");
+
+    async function loadCustomers() {
+        try {
+            const res = await fetch("/api/customers");
+            if (!res.ok) throw new Error("Failed to fetch customers");
+            customers = await res.json();
+            render();
+        } catch (err) {
+            console.error("Error loading customers:", err);
+        }
+    }
 
     function render() {
         const query = search.value.trim().toLocaleLowerCase();
@@ -70,7 +77,7 @@
         cancel.classList.add("d-none");
     }
 
-    form.addEventListener("submit", event => {
+    form.addEventListener("submit", async event => {
         event.preventDefault();
         if (!form.reportValidity()) return;
 
@@ -81,34 +88,57 @@
             city: fields.city.value.trim()
         };
 
-        if (fields.id.value) {
-            const existing = customers.find(item => item.id === Number(fields.id.value));
-            if (!existing) return;
-            Object.assign(existing, customer);
-        } else {
-            customers.push({ id: nextId++, ...customer });
-        }
+        try {
+            submit.disabled = true;
+            if (fields.id.value) {
+                const id = Number(fields.id.value);
+                const res = await fetch(`/api/customers/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id, ...customer })
+                });
+                if (!res.ok) throw new Error("Failed to update customer");
+            } else {
+                const res = await fetch("/api/customers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(customer)
+                });
+                if (!res.ok) throw new Error("Failed to add customer");
+            }
 
-        resetForm();
-        render();
+            resetForm();
+            await loadCustomers();
+        } catch (err) {
+            console.error("Error saving customer:", err);
+            alert("Error saving customer to database");
+        } finally {
+            submit.disabled = false;
+        }
     });
 
-    rows.addEventListener("click", event => {
+    rows.addEventListener("click", async event => {
         const button = event.target.closest("button[data-action]");
         if (!button) return;
 
         const id = Number(button.dataset.id);
-        const index = customers.findIndex(customer => customer.id === id);
-        if (index < 0) return;
+        const customer = customers.find(item => item.id === id);
+        if (!customer) return;
 
         if (button.dataset.action === "delete") {
-            customers.splice(index, 1);
-            if (fields.id.value === String(id)) resetForm();
-            render();
+            if (!confirm(`Are you sure you want to delete "${customer.name}"?`)) return;
+            try {
+                const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
+                if (!res.ok) throw new Error("Failed to delete customer");
+                if (fields.id.value === String(id)) resetForm();
+                await loadCustomers();
+            } catch (err) {
+                console.error("Error deleting customer:", err);
+                alert("Error deleting customer from database");
+            }
             return;
         }
 
-        const customer = customers[index];
         fields.id.value = String(customer.id);
         fields.name.value = customer.name;
         fields.email.value = customer.email;
@@ -122,5 +152,6 @@
 
     search.addEventListener("input", render);
     cancel.addEventListener("click", resetForm);
-    render();
+
+    loadCustomers();
 })();

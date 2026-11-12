@@ -1,10 +1,5 @@
 (() => {
-    const products = [
-        { id: 1, name: "Wireless headphones", category: "Electronics", price: 1250000, stock: 12 },
-        { id: 2, name: "Mechanical keyboard", category: "Accessories", price: 890000, stock: 4 },
-        { id: 3, name: "USB-C cable", category: "Accessories", price: 120000, stock: 0 }
-    ];
-    let nextId = 4;
+    let products = [];
 
     const form = document.querySelector("#product-form");
     if (!form) return;
@@ -24,6 +19,17 @@
     const submit = document.querySelector("#product-submit");
     const cancel = document.querySelector("#product-cancel");
     const money = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+
+    async function loadProducts() {
+        try {
+            const res = await fetch("/api/products");
+            if (!res.ok) throw new Error("Failed to fetch products");
+            products = await res.json();
+            render();
+        } catch (err) {
+            console.error("Error loading products:", err);
+        }
+    }
 
     function button(label, action, id, style) {
         const element = document.createElement("button");
@@ -94,7 +100,7 @@
         cancel.classList.add("d-none");
     }
 
-    form.addEventListener("submit", event => {
+    form.addEventListener("submit", async event => {
         event.preventDefault();
         if (!form.reportValidity()) return;
 
@@ -107,34 +113,56 @@
         if (!Number.isSafeInteger(details.price) || details.price < 1 ||
             !Number.isSafeInteger(details.stock) || details.stock < 0) return;
 
-        if (fields.id.value) {
-            const existing = products.find(product => product.id === Number(fields.id.value));
-            if (!existing) return;
-            Object.assign(existing, details);
-        } else {
-            products.push({ id: nextId++, ...details });
+        try {
+            submit.disabled = true;
+            if (fields.id.value) {
+                const id = Number(fields.id.value);
+                const res = await fetch(`/api/products/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id, ...details })
+                });
+                if (!res.ok) throw new Error("Failed to update product");
+            } else {
+                const res = await fetch("/api/products", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(details)
+                });
+                if (!res.ok) throw new Error("Failed to add product");
+            }
+            resetForm();
+            await loadProducts();
+        } catch (err) {
+            console.error("Error saving product:", err);
+            alert("Error saving product to database");
+        } finally {
+            submit.disabled = false;
         }
-
-        resetForm();
-        render();
     });
 
-    rows.addEventListener("click", event => {
+    rows.addEventListener("click", async event => {
         const action = event.target.closest("button[data-action]");
         if (!action) return;
 
         const id = Number(action.dataset.id);
-        const index = products.findIndex(product => product.id === id);
-        if (index < 0) return;
+        const product = products.find(p => p.id === id);
+        if (!product) return;
 
         if (action.dataset.action === "delete") {
-            products.splice(index, 1);
-            if (fields.id.value === String(id)) resetForm();
-            render();
+            if (!confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+            try {
+                const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+                if (!res.ok) throw new Error("Failed to delete product");
+                if (fields.id.value === String(id)) resetForm();
+                await loadProducts();
+            } catch (err) {
+                console.error("Error deleting product:", err);
+                alert("Error deleting product from database");
+            }
             return;
         }
 
-        const product = products[index];
         fields.id.value = String(product.id);
         fields.name.value = product.name;
         fields.category.value = product.category;
@@ -148,5 +176,6 @@
 
     search.addEventListener("input", render);
     cancel.addEventListener("click", resetForm);
-    render();
+
+    loadProducts();
 })();
