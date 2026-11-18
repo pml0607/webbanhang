@@ -25,8 +25,16 @@ pipeline {
 
         stage('Unit & Smoke Tests') {
             steps {
-                echo '=== BƯỚC 2: Chạy kiểm thử tự động (Unit Test) ==='
-                sh 'dotnet test WebBanHang.Tests/WebBanHang.Tests.csproj --configuration Release --verbosity normal'
+                echo '=== BƯỚC 2: Chạy kiểm thử tự động (Unit Test) qua Docker .NET SDK ==='
+                sh '''
+                    if command -v dotnet >/dev/null 2>&1; then
+                        echo "Phát hiện dotnet CLI trên Jenkins agent, tiến hành chạy test trực tiếp..."
+                        dotnet test WebBanHang.Tests/WebBanHang.Tests.csproj --configuration Release --verbosity normal
+                    else
+                        echo "Jenkins agent chưa cài dotnet CLI. Tự động chạy test qua Docker .NET SDK (target test-runner)..."
+                        docker build --target test-runner -t webbanhang-test:latest .
+                    fi
+                '''
             }
         }
 
