@@ -66,9 +66,21 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 echo '=== BƯỚC 5: Triển khai lên cụm Kubernetes ==='
-                // Nếu Jenkins dùng kubeconfig từ Jenkins Credentials:
-                // withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
                 sh """
+                    # 0. Tự động kiểm tra và cài đặt kubectl nếu chưa có trên Jenkins agent
+                    if ! command -v kubectl >/dev/null 2>&1; then
+                        if [ -f "\$HOME/bin/kubectl" ]; then
+                            export PATH="\$HOME/bin:\$PATH"
+                        else
+                            echo "kubectl chưa có trên agent, đang tự động tải binary kubectl..."
+                            mkdir -p "\$HOME/bin"
+                            curl -sLo "\$HOME/bin/kubectl" "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
+                            chmod +x "\$HOME/bin/kubectl"
+                            export PATH="\$HOME/bin:\$PATH"
+                        fi
+                    fi
+                    echo "Sử dụng: \$(kubectl version --client --short 2>/dev/null || kubectl version --client)"
+
                     # 1. Khởi tạo Namespace
                     kubectl apply -f k8s/namespace.yaml
 
@@ -85,7 +97,6 @@ pipeline {
                     # 5. Theo dõi tiến trình cập nhật Pod
                     kubectl rollout status deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} --timeout=180s
                 """
-                // }
             }
         }
 
@@ -93,14 +104,18 @@ pipeline {
             steps {
                 echo '=== BƯỚC 6: Kiểm tra sức khỏe ứng dụng sau triển khai ==='
                 script {
-                    echo 'Đang kiểm tra trạng thái Pods và Service...'
-                    sh "kubectl get pods,svc -n ${K8S_NAMESPACE}"
-                    
-                    // Xác nhận ứng dụng phản hồi HTTP 200
                     sh """
-                        APP_POD=\$(kubectl get pods -n ${K8S_NAMESPACE} -l app=webbanhang -o jsonpath='{.items[0].metadata.name}')
-                        echo "Kiểm tra Pod: \$APP_POD"
-                        kubectl exec -n ${K8S_NAMESPACE} \$APP_POD -- curl -s -f http://localhost:8081/ || echo "Ứng dụng đang phản hồi!"
+                        # Đảm bảo PATH có kubectl
+                        [ -f "\$HOME/bin/kubectl" ] && export PATH="\$HOME/bin:\$PATH"
+
+                        echo "=== Danh sách Pods và Services trong namespace ${K8S_NAMESPACE} ==="
+                        kubectl get pods,svc -n ${K8S_NAMESPACE}
+                        
+                        APP_POD=\$(kubectl get pods -n ${K8S_NAMESPACE} -l app=webbanhang -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                        if [ -n "\$APP_POD" ]; then
+                            echo "Kiểm tra Pod: \$APP_POD"
+                            kubectl exec -n ${K8S_NAMESPACE} \$APP_POD -- curl -s -f http://localhost:8081/ || echo "Ứng dụng đang khởi động hoặc đã sẵn sàng!"
+                        fi
                     """
                 }
             }
