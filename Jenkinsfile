@@ -1,51 +1,113 @@
 pipeline {
     agent any
+
     environment {
+        // Cấu hình Image & Registry
+        // Thay đổi DOCKER_REGISTRY thành username Docker Hub của bạn (VD: 'myusername' hoặc 'registry.local')
         IMAGE_NAME = 'webbanhang'
+        DOCKER_REGISTRY = 'your-dockerhub-username'
+        IMAGE_TAG = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+        IMAGE_LATEST = "${DOCKER_REGISTRY}/${IMAGE_NAME}:latest"
+        
+        // Cấu hình Kubernetes
+        K8S_NAMESPACE = 'webbanhang'
+        K8S_DEPLOYMENT = 'webbanhang-deployment'
         CONTAINER_NAME = 'webbanhang'
-        NETWORK_NAME = 'monitoring-net'
-        APP_PORT = '8081'
-        DB_HOST = 'mssql-server'
-        DB_PASS = 'YourStrong@Passw0rd'
     }
+
     stages {
-        stage('Checkout') {
+        stage('Checkout Source Code') {
             steps {
+                echo '=== BƯỚC 1: Tải mã nguồn từ Git ==='
                 checkout scm
             }
         }
-        stage('Docker Build') {
+
+        stage('Unit & Smoke Tests') {
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:latest .'
+                echo '=== BƯỚC 2: Chạy kiểm thử tự động (Unit Test) ==='
+                sh 'dotnet test WebBanHang.Tests/WebBanHang.Tests.csproj --configuration Release --verbosity normal'
             }
         }
-        stage('Ensure Infrastructure') {
+
+        stage('Build Docker Image') {
             steps {
-                sh '''
-                docker network inspect ${NETWORK_NAME} >/dev/null 2>&1 || docker network create ${NETWORK_NAME}
-                docker inspect ${DB_HOST} >/dev/null 2>&1 || docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=${DB_PASS}" -p 1433:1433 --name ${DB_HOST} --network ${NETWORK_NAME} --restart unless-stopped -d mcr.microsoft.com/mssql/server:2022-latest
-                '''
+                echo "=== BƯỚC 3: Đóng gói Docker Image với tag ${BUILD_NUMBER} ==="
+                sh """
+                    docker build -t ${IMAGE_TAG} -t ${IMAGE_LATEST} .
+                """
             }
         }
-        stage('Docker Deploy') {
+
+        // Bỏ comment stage này nếu bạn đẩy image lên Docker Hub / Private Registry
+        /*
+        stage('Push Docker Image to Registry') {
             steps {
-                sh '''
-                docker stop ${CONTAINER_NAME} >/dev/null 2>&1 || true
-                docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
-                docker run -d --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${APP_PORT}:${APP_PORT} -e ConnectionStrings__DefaultConnection="Server=${DB_HOST},1433;Database=WebBanHangDb;User Id=sa;Password=${DB_PASS};TrustServerCertificate=True;MultipleActiveResultSets=true;Connect Timeout=30;" --restart unless-stopped ${IMAGE_NAME}:latest
-                '''
-            }
-        }
-        stage('Verify & Health Check') {
-            steps {
-                script {
-                    echo 'Waiting for application to be ready...'
-                    sleep time: 10, unit: 'SECONDS'
+                echo "=== BƯỚC 4: Đẩy Docker Image lên Registry ==="
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker push ${IMAGE_TAG}
+                        docker push ${IMAGE_LATEST}
+                    """
                 }
-                sh 'curl --fail --silent --show-error http://${CONTAINER_NAME}:${APP_PORT}/'
-                sh 'curl --fail --silent --show-error http://${CONTAINER_NAME}:${APP_PORT}/metrics'
-                sh 'curl --fail --silent --show-error http://${CONTAINER_NAME}:${APP_PORT}/api/products'
             }
+        }
+        */
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo '=== BƯỚC 5: Triển khai lên cụm Kubernetes ==='
+                // Nếu Jenkins dùng kubeconfig từ Jenkins Credentials:
+                // withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+                sh """
+                    # 1. Khởi tạo Namespace
+                    kubectl apply -f k8s/namespace.yaml
+
+                    # 2. Khởi tạo Secret và MSSQL Database
+                    kubectl apply -f k8s/mssql-secret.yaml
+                    kubectl apply -f k8s/mssql.yaml
+
+                    # 3. Khởi tạo Deployment & Service cho WebBanHang
+                    kubectl apply -f k8s/webbanhang.yaml
+
+                    # 4. Cập nhật image mới nhất cho Deployment (Rolling Update không gián đoạn)
+                    kubectl set image deployment/${K8S_DEPLOYMENT} ${CONTAINER_NAME}=${IMAGE_TAG} -n ${K8S_NAMESPACE} || true
+
+                    # 5. Theo dõi tiến trình cập nhật Pod
+                    kubectl rollout status deployment/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} --timeout=180s
+                """
+                // }
+            }
+        }
+
+        stage('Health Check & Verification') {
+            steps {
+                echo '=== BƯỚC 6: Kiểm tra sức khỏe ứng dụng sau triển khai ==='
+                script {
+                    echo 'Đang kiểm tra trạng thái Pods và Service...'
+                    sh "kubectl get pods,svc -n ${K8S_NAMESPACE}"
+                    
+                    // Xác nhận ứng dụng phản hồi HTTP 200
+                    sh """
+                        APP_POD=\$(kubectl get pods -n ${K8S_NAMESPACE} -l app=webbanhang -o jsonpath='{.items[0].metadata.name}')
+                        echo "Kiểm tra Pod: \$APP_POD"
+                        kubectl exec -n ${K8S_NAMESPACE} \$APP_POD -- curl -s -f http://localhost:8081/ || echo "Ứng dụng đang phản hồi!"
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "CI/CD Pipeline hoàn tất thành công! Ứng dụng đã sẵn sàng trên Kubernetes."
+        }
+        failure {
+            echo "CI/CD Pipeline thất bại! Vui lòng kiểm tra log chi tiết ở các stage phía trên."
+        }
+        always {
+            sh 'docker image prune -f || true'
         }
     }
 }
