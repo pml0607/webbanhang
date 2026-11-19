@@ -5,7 +5,7 @@ pipeline {
         // Cấu hình Image & Registry
         // Thay đổi DOCKER_REGISTRY thành username Docker Hub của bạn (VD: 'myusername' hoặc 'registry.local')
         IMAGE_NAME = 'webbanhang'
-        DOCKER_REGISTRY = 'your-dockerhub-username'
+        DOCKER_REGISTRY = 'lynkenion'
         IMAGE_TAG = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}"
         IMAGE_LATEST = "${DOCKER_REGISTRY}/${IMAGE_NAME}:latest"
         
@@ -48,7 +48,6 @@ pipeline {
         }
 
         // Bỏ comment stage này nếu bạn đẩy image lên Docker Hub / Private Registry
-        /*
         stage('Push Docker Image to Registry') {
             steps {
                 echo "=== BƯỚC 4: Đẩy Docker Image lên Registry ==="
@@ -61,7 +60,6 @@ pipeline {
                 }
             }
         }
-        */
 
         stage('Deploy to Kubernetes') {
             steps {
